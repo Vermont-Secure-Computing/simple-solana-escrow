@@ -1,0 +1,492 @@
+use anchor_lang::prelude::*;
+use anchor_lang::system_program;
+
+declare_id!("E13gKpCo3pmg1QizBgEt2kxkVuTXAN6mrQQaS4aAt9LZ");
+
+pub const STATUS_CREATED: u8 = 0;
+pub const STATUS_DEPOSITS_COMPLETE: u8 = 1;
+pub const STATUS_FINALIZATION_SUGGESTED: u8 = 2;
+pub const STATUS_COMPLETED: u8 = 3;
+
+#[program]
+pub mod sol_shop_escrow {
+    use super::*;
+
+    pub fn create_escrow(
+        ctx: Context<CreateEscrow>,
+        _escrow_id: u64,
+        escrow_type: u8,
+        party_a: Pubkey,
+        party_b: Pubkey,
+        required_deposit_a: u64,
+        required_deposit_b: u64,
+        note: String,
+    ) -> Result<()> {
+        require!(required_deposit_a > 0, EscrowError::InvalidAmount);
+        require!(required_deposit_b > 0, EscrowError::InvalidAmount);
+        require!(note.len() <= 200, EscrowError::NoteTooLong);
+
+        let creator = ctx.accounts.creator.key();
+
+        require!(
+            creator == party_a || creator == party_b,
+            EscrowError::CreatorMustBeParty
+        );
+
+        require!(
+            party_a != Pubkey::default() || party_b != Pubkey::default(),
+            EscrowError::InvalidParty
+        );
+
+        if party_a != Pubkey::default() && party_b != Pubkey::default() {
+            require!(party_a != party_b, EscrowError::InvalidParty);
+        }
+
+        let escrow = &mut ctx.accounts.escrow;
+
+        escrow.creator = creator;
+        escrow.party_a = party_a;
+        escrow.party_b = party_b;
+
+        escrow.escrow_type = escrow_type;
+
+        escrow.required_deposit_a = required_deposit_a;
+        escrow.required_deposit_b = required_deposit_b;
+
+        escrow.deposited_a = 0;
+        escrow.deposited_b = 0;
+
+        escrow.proposed_payout_a = 0;
+        escrow.proposed_payout_b = 0;
+        escrow.finalization_proposer = Pubkey::default();
+        escrow.finalization_note = String::new();
+
+        escrow.vault = ctx.accounts.vault.key();
+        escrow.status = STATUS_CREATED;
+
+        escrow.created_at = Clock::get()?.unix_timestamp;
+        escrow.deposit_at = 0;
+        escrow.finalized_at = 0;
+
+        escrow.note = note;
+
+        Ok(())
+    }
+
+    pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
+        require!(amount > 0, EscrowError::InvalidAmount);
+
+        let escrow = &mut ctx.accounts.escrow;
+        let depositor = ctx.accounts.depositor.key();
+
+        require!(escrow.status == STATUS_CREATED, EscrowError::InvalidStatus);
+        require_keys_eq!(
+            escrow.vault,
+            ctx.accounts.vault.key(),
+            EscrowError::InvalidVault
+        );
+
+        let is_party_a = if depositor == escrow.party_a {
+            true
+        } else if depositor == escrow.party_b {
+            false
+        } else if escrow.party_a == Pubkey::default() && depositor != escrow.party_b {
+            escrow.party_a = depositor;
+            true
+        } else if escrow.party_b == Pubkey::default() && depositor != escrow.party_a {
+            escrow.party_b = depositor;
+            false
+        } else {
+            return err!(EscrowError::Unauthorized);
+        };
+
+        if is_party_a {
+            require!(escrow.deposited_a == 0, EscrowError::AlreadyDeposited);
+            require!(
+                amount == escrow.required_deposit_a,
+                EscrowError::InvalidDepositAmount
+            );
+
+            escrow.deposited_a = amount;
+        } else {
+            require!(escrow.deposited_b == 0, EscrowError::AlreadyDeposited);
+            require!(
+                amount == escrow.required_deposit_b,
+                EscrowError::InvalidDepositAmount
+            );
+
+            escrow.deposited_b = amount;
+        }
+
+        let cpi_accounts = system_program::Transfer {
+            from: ctx.accounts.depositor.to_account_info(),
+            to: ctx.accounts.vault.to_account_info(),
+        };
+
+        let cpi_ctx = CpiContext::new(
+            ctx.accounts.system_program.to_account_info(),
+            cpi_accounts,
+        );
+
+        system_program::transfer(cpi_ctx, amount)?;
+
+        if escrow.deposited_a == escrow.required_deposit_a
+            && escrow.deposited_b == escrow.required_deposit_b
+        {
+            escrow.status = STATUS_DEPOSITS_COMPLETE;
+            escrow.deposit_at = Clock::get()?.unix_timestamp;
+        }
+
+        Ok(())
+    }
+
+
+    pub fn withdraw_before_complete(ctx: Context<WithdrawBeforeComplete>) -> Result<()> {
+        let escrow = &mut ctx.accounts.escrow;
+        let withdrawer = ctx.accounts.withdrawer.key();
+
+        require!(escrow.status == STATUS_CREATED, EscrowError::InvalidStatus);
+        require_keys_eq!(
+            escrow.vault,
+            ctx.accounts.vault.key(),
+            EscrowError::InvalidVault
+        );
+        require_keys_eq!(
+            ctx.accounts.creator.key(),
+            escrow.creator,
+            EscrowError::Unauthorized
+        );
+
+        let amount = if withdrawer == escrow.party_a {
+            require!(escrow.deposited_a > 0, EscrowError::NothingToWithdraw);
+            let amount = escrow.deposited_a;
+            escrow.deposited_a = 0;
+            amount
+        } else if withdrawer == escrow.party_b {
+            require!(escrow.deposited_b > 0, EscrowError::NothingToWithdraw);
+            let amount = escrow.deposited_b;
+            escrow.deposited_b = 0;
+            amount
+        } else {
+            return err!(EscrowError::Unauthorized);
+        };
+
+        **ctx.accounts.vault.to_account_info().try_borrow_mut_lamports()? -= amount;
+        **ctx.accounts.withdrawer.to_account_info().try_borrow_mut_lamports()? += amount;
+
+        Ok(())
+    }
+
+    pub fn suggest_finalization(
+        ctx: Context<SuggestFinalization>,
+        payout_a: u64,
+        payout_b: u64,
+        finalization_note: String,
+    ) -> Result<()> {
+        let escrow = &mut ctx.accounts.escrow;
+        let signer = ctx.accounts.signer.key();
+
+        require!(
+            escrow.status == STATUS_DEPOSITS_COMPLETE,
+            EscrowError::InvalidStatus
+        );
+
+        require!(
+            signer == escrow.party_a || signer == escrow.party_b,
+            EscrowError::Unauthorized
+        );
+
+        let total_locked = escrow.deposited_a + escrow.deposited_b;
+
+        require!(
+            payout_a + payout_b == total_locked,
+            EscrowError::InvalidFinalization
+        );
+
+        require!(finalization_note.len() <= 200, EscrowError::NoteTooLong);
+
+
+
+        escrow.proposed_payout_a = payout_a;
+        escrow.proposed_payout_b = payout_b;
+        escrow.finalization_proposer = signer;
+        escrow.finalization_note = finalization_note;
+
+        escrow.status = STATUS_FINALIZATION_SUGGESTED;
+
+        Ok(())
+    }
+
+    pub fn accept_finalization(
+        ctx: Context<AcceptFinalization>,
+    ) -> Result<()> {
+        let escrow = &mut ctx.accounts.escrow;
+        let signer = ctx.accounts.signer.key();
+
+        require!(
+            escrow.status == STATUS_FINALIZATION_SUGGESTED,
+            EscrowError::InvalidStatus
+        );
+
+        require!(
+            signer == escrow.party_a || signer == escrow.party_b,
+            EscrowError::Unauthorized
+        );
+
+        require!(
+            signer != escrow.finalization_proposer,
+            EscrowError::CannotAcceptOwnFinalization
+        );
+
+        let payout_a = escrow.proposed_payout_a;
+        let payout_b = escrow.proposed_payout_b;
+
+        **ctx.accounts.vault.to_account_info().try_borrow_mut_lamports()? -= payout_a;
+        **ctx.accounts.party_a.to_account_info().try_borrow_mut_lamports()? += payout_a;
+
+        **ctx.accounts.vault.to_account_info().try_borrow_mut_lamports()? -= payout_b;
+        **ctx.accounts.party_b.to_account_info().try_borrow_mut_lamports()? += payout_b;
+
+        escrow.status = STATUS_COMPLETED;
+        escrow.finalized_at = Clock::get()?.unix_timestamp;
+
+        Ok(())
+    }
+
+    pub fn reject_finalization(
+        ctx: Context<RejectFinalization>,
+    ) -> Result<()> {
+        let escrow = &mut ctx.accounts.escrow;
+        let signer = ctx.accounts.signer.key();
+
+        require!(
+            escrow.status == STATUS_FINALIZATION_SUGGESTED,
+            EscrowError::InvalidStatus
+        );
+
+        require!(
+            signer == escrow.party_a || signer == escrow.party_b,
+            EscrowError::Unauthorized
+        );
+
+        require!(
+            signer != escrow.finalization_proposer,
+            EscrowError::CannotRejectOwnFinalization
+        );
+
+        escrow.proposed_payout_a = 0;
+        escrow.proposed_payout_b = 0;
+        escrow.finalization_proposer = Pubkey::default();
+        escrow.finalization_note = String::new();
+
+        escrow.status = STATUS_DEPOSITS_COMPLETE;
+
+        Ok(())
+    }
+}
+
+#[derive(Accounts)]
+#[instruction(escrow_id: u64)]
+pub struct CreateEscrow<'info> {
+    #[account(mut)]
+    pub creator: Signer<'info>,
+
+    #[account(
+        init,
+        payer = creator,
+        space = 8 + Escrow::INIT_SPACE,
+        seeds = [
+            b"escrow",
+            creator.key().as_ref(),
+            &escrow_id.to_le_bytes()
+        ],
+        bump
+    )]
+    pub escrow: Account<'info, Escrow>,
+
+    #[account(
+        init,
+        payer = creator,
+        space = 0,
+        seeds = [
+            b"vault",
+            escrow.key().as_ref()
+        ],
+        bump,
+    )]
+    /// CHECK: system-owned PDA vault for holding SOL
+    pub vault: UncheckedAccount<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct Deposit<'info> {
+    #[account(mut)]
+    pub depositor: Signer<'info>,
+
+    #[account(mut)]
+    pub escrow: Account<'info, Escrow>,
+
+    #[account(
+        mut,
+        seeds = [
+            b"vault",
+            escrow.key().as_ref()
+        ],
+        bump
+    )]
+    /// CHECK: system-owned PDA vault for holding SOL
+    pub vault: UncheckedAccount<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct Escrow {
+    pub creator: Pubkey,
+
+    pub party_a: Pubkey,
+    pub party_b: Pubkey,
+
+    pub escrow_type: u8,
+
+    pub required_deposit_a: u64,
+    pub required_deposit_b: u64,
+
+    pub deposited_a: u64,
+    pub deposited_b: u64,
+
+    pub proposed_payout_a: u64,
+    pub proposed_payout_b: u64,
+    pub finalization_proposer: Pubkey,
+
+    #[max_len(200)]
+    pub finalization_note: String,
+
+    pub vault: Pubkey,
+    pub status: u8,
+
+    pub created_at: i64,
+    pub deposit_at: i64,
+    pub finalized_at: i64,
+
+    #[max_len(200)]
+    pub note: String,
+}
+
+#[derive(Accounts)]
+pub struct WithdrawBeforeComplete<'info> {
+    #[account(mut)]
+    pub withdrawer: Signer<'info>,
+
+    #[account(
+        mut,
+        close = creator
+    )]
+    pub escrow: Account<'info, Escrow>,
+
+    #[account(mut)]
+    /// CHECK: creator receives escrow rent
+    pub creator: UncheckedAccount<'info>,
+
+    #[account(
+        mut,
+        seeds = [
+            b"vault",
+            escrow.key().as_ref()
+        ],
+        bump
+    )]
+    /// CHECK: system-owned PDA vault for holding SOL
+    pub vault: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct SuggestFinalization<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+
+    #[account(mut)]
+    pub escrow: Account<'info, Escrow>,
+}
+
+#[derive(Accounts)]
+pub struct AcceptFinalization<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+
+    #[account(mut)]
+    pub escrow: Account<'info, Escrow>,
+
+    #[account(mut)]
+    /// CHECK:
+    pub party_a: UncheckedAccount<'info>,
+
+    #[account(mut)]
+    /// CHECK:
+    pub party_b: UncheckedAccount<'info>,
+
+    #[account(
+        mut,
+        seeds = [
+            b"vault",
+            escrow.key().as_ref()
+        ],
+        bump
+    )]
+    /// CHECK:
+    pub vault: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct RejectFinalization<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+
+    #[account(mut)]
+    pub escrow: Account<'info, Escrow>,
+}
+
+#[error_code]
+pub enum EscrowError {
+    #[msg("Invalid amount")]
+    InvalidAmount,
+
+    #[msg("Note is too long")]
+    NoteTooLong,
+
+    #[msg("Invalid escrow status")]
+    InvalidStatus,
+
+    #[msg("This wallet has already deposited")]
+    AlreadyDeposited,
+
+    #[msg("Deposit amount must match the required amount exactly")]
+    InvalidDepositAmount,
+
+    #[msg("Unauthorized wallet")]
+    Unauthorized,
+
+    #[msg("Invalid vault")]
+    InvalidVault,
+
+    #[msg("Creator must be either Party A or Party B")]
+    CreatorMustBeParty,
+
+    #[msg("Invalid party setup")]
+    InvalidParty,
+
+    #[msg("Nothing to withdraw")]
+    NothingToWithdraw,
+
+    #[msg("Invalid finalization amounts")]
+    InvalidFinalization,
+
+    #[msg("You cannot accept your own finalization")]
+    CannotAcceptOwnFinalization,
+
+    #[msg("You cannot reject your own finalization")]
+    CannotRejectOwnFinalization,
+}
