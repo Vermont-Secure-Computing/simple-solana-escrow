@@ -3,9 +3,9 @@ import { PublicKey, SystemProgram } from "@solana/web3.js";
 import BN from "bn.js";
 import idl from "../idl/sol_shop_escrow.json";
 
-export const PROGRAM_ID = new PublicKey(
-  "E13gKpCo3pmg1QizBgEt2kxkVuTXAN6mrQQaS4aAt9LZ"
-);
+export const PROGRAM_ID = new PublicKey("E13gKpCo3pmg1QizBgEt2kxkVuTXAN6mrQQaS4aAt9LZ");
+
+const DONATION_RECIPIENT = "61Gt8siRo84pmGziia5dHuJMkx9ne1d4Cb5aHsyQGP85";
 
 export const ESCROW_TYPE_PAYMENT = 0;
 export const ESCROW_TYPE_BET = 1;
@@ -45,6 +45,7 @@ export async function createEscrow({
   partyA,
   partyB,
   escrowId,
+  referenceAmount,
   requiredDepositA,
   requiredDepositB,
   note,
@@ -64,6 +65,7 @@ export async function createEscrow({
       escrowType,
       new PublicKey(partyA),
       new PublicKey(partyB),
+      new BN(referenceAmount),
       new BN(requiredDepositA),
       new BN(requiredDepositB),
       note
@@ -150,6 +152,8 @@ export async function fetchEscrowsForWallet({ wallet, connection }) {
       proposedPayoutB: escrow.proposedPayoutB.toString(),
       finalizationProposer: escrow.finalizationProposer.toBase58(),
       finalizationNote: escrow.finalizationNote,
+      proposedDonation: escrow.proposedDonation.toString(),
+      referenceAmount: escrow.referenceAmount.toString(),
 
       vault: escrow.vault.toBase58(),
       status: escrow.status,
@@ -168,9 +172,9 @@ export async function fetchEscrowByPda({ wallet, connection, escrowPda }) {
   const pubkey = new PublicKey(escrowPda);
 
   const escrow = await program.account.escrow.fetch(pubkey);
-
+  console.log("escrow: ", escrow)
   return {
-      pda: item.publicKey.toBase58(),
+      pda: pubkey.toBase58(),
 
       creator: escrow.creator.toBase58(),
       partyA: escrow.partyA.toBase58(),
@@ -188,6 +192,8 @@ export async function fetchEscrowByPda({ wallet, connection, escrowPda }) {
       proposedPayoutB: escrow.proposedPayoutB.toString(),
       finalizationProposer: escrow.finalizationProposer.toBase58(),
       finalizationNote: escrow.finalizationNote,
+      proposedDonation: escrow.proposedDonation.toString(),
+      referenceAmount: escrow.referenceAmount.toString(),
 
       vault: escrow.vault.toBase58(),
       status: escrow.status,
@@ -250,12 +256,13 @@ export async function suggestFinalization({
   escrowPda,
   payoutA,
   payoutB,
+  proposedDonation,
   finalizationNote,
 }) {
   const program = getProgram(wallet, connection);
 
   const sig = await program.methods
-    .suggestFinalization(new BN(payoutA), new BN(payoutB), finalizationNote)
+    .suggestFinalization(new BN(payoutA), new BN(payoutB), new BN(proposedDonation), finalizationNote)
     .accounts({
       signer: wallet.publicKey,
       escrow: new PublicKey(escrowPda),
@@ -283,6 +290,7 @@ export async function acceptFinalization({
       vault: new PublicKey(vaultPda),
       partyA: new PublicKey(partyA),
       partyB: new PublicKey(partyB),
+      donationRecipient: new PublicKey(DONATION_RECIPIENT),
     })
     .rpc();
 

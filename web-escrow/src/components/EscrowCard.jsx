@@ -26,6 +26,7 @@ function EscrowCard({ escrow, onFunded }) {
     const [payoutA, setPayoutA] = useState("");
     const [payoutB, setPayoutB] = useState("");
     const [finalizationNote, setFinalizationNote] = useState("");
+    const [donationPercent, setDonationPercent] = useState(0);
 
     const myKey = wallet.publicKey?.toBase58();
     const nullKey = SystemProgram.programId.toBase58();
@@ -131,17 +132,21 @@ function EscrowCard({ escrow, onFunded }) {
     /**
      * Logic for Add Finalization suggestion
      */
-    const totalLocked =
-        Number(escrow.depositedA) + Number(escrow.depositedB);
+    const totalLocked = Number(escrow.depositedA) + Number(escrow.depositedB);
 
-    const canSuggestFinalization =
-        escrow.status === 1 && (isPartyA || isPartyB);
+    const canSuggestFinalization = escrow.status === 1 && (isPartyA || isPartyB);
 
-    const payoutTotalLamports =
-        Math.round(Number(payoutA || 0) * LAMPORTS_PER_SOL) +
-        Math.round(Number(payoutB || 0) * LAMPORTS_PER_SOL);
-
-    const payoutIsValid = payoutTotalLamports === totalLocked;
+    /**
+     * Donation computation handler
+     */
+    const referenceAmount = Number(escrow.referenceAmount || 0);
+    const donationLamports = Math.floor((referenceAmount * Number(donationPercent)) / 100);
+    const payoutALamports = Math.round(Number(payoutA || 0) * LAMPORTS_PER_SOL);
+    const payoutBLamports = Math.round(Number(payoutB || 0) * LAMPORTS_PER_SOL);
+    const payoutTotalLamports = payoutALamports + payoutBLamports + donationLamports;
+    const remainingLamports = totalLocked - payoutTotalLamports;
+    const payoutIsValid = remainingLamports === 0;
+    
 
 
     const handleSuggestFinalization = async () => {
@@ -154,12 +159,21 @@ function EscrowCard({ escrow, onFunded }) {
 
             setLoading(true);
 
+            // const sig = await suggestFinalization({
+            //     wallet,
+            //     connection,
+            //     escrowPda: escrow.pda,
+            //     payoutA: Math.round(Number(payoutA) * LAMPORTS_PER_SOL),
+            //     payoutB: Math.round(Number(payoutB) * LAMPORTS_PER_SOL),
+            //     finalizationNote,
+            // });
             const sig = await suggestFinalization({
                 wallet,
                 connection,
                 escrowPda: escrow.pda,
-                payoutA: Math.round(Number(payoutA) * LAMPORTS_PER_SOL),
-                payoutB: Math.round(Number(payoutB) * LAMPORTS_PER_SOL),
+                payoutA: payoutALamports,
+                payoutB: payoutBLamports,
+                proposedDonation: donationLamports,
                 finalizationNote,
             });
 
@@ -226,7 +240,40 @@ function EscrowCard({ escrow, onFunded }) {
         }
     };
 
-    console.log("escrow: ", escrow)
+    
+
+    const openFinalizationForm = () => {
+        setDonationPercent(0);
+
+        setShowFinalizationForm(true);
+    };
+
+    const handleDonationChange = (percent) => {
+        setDonationPercent(percent);
+
+        const nextDonationLamports = Math.floor((referenceAmount * Number(percent)) / 100);
+
+        const currentA = Math.round(Number(payoutA || 0) * LAMPORTS_PER_SOL);
+        const currentB = Math.round(Number(payoutB || 0) * LAMPORTS_PER_SOL);
+
+        const totalAvailableForParties = totalLocked - nextDonationLamports;
+
+        let nextA = currentA;
+        let nextB = currentB;
+
+        if (currentB >= currentA) {
+            nextB = totalAvailableForParties - currentA;
+        } else {
+            nextA = totalAvailableForParties - currentB;
+        }
+
+        if (nextA < 0) nextA = 0;
+        if (nextB < 0) nextB = 0;
+
+        setPayoutA(String(nextA / LAMPORTS_PER_SOL));
+        setPayoutB(String(nextB / LAMPORTS_PER_SOL));
+    };
+
 
     return (
         <div className="rounded-2xl border border-white/10 bg-slate-950 p-5 text-white">
@@ -371,6 +418,15 @@ function EscrowCard({ escrow, onFunded }) {
                             {sol(escrow.proposedPayoutB)} SOL
                             </p>
                         </div>
+
+                        <div className="mt-4 rounded-xl border border-slate-700 bg-slate-900 p-4">
+                            <p className="text-xs uppercase tracking-wide text-slate-500">
+                                Website Donation
+                            </p>
+                            <p className="mt-2 text-2xl font-bold text-purple-300">
+                                {sol(escrow.proposedDonation || 0)} SOL
+                            </p>
+                        </div>
                     </div>
 
                     {escrow.finalizationNote && (
@@ -422,7 +478,7 @@ function EscrowCard({ escrow, onFunded }) {
 
             {canSuggestFinalization && !showFinalizationForm && (
                 <button
-                    onClick={() => setShowFinalizationForm(true)}
+                    onClick={openFinalizationForm}
                     className="mt-4 rounded-xl bg-purple-600 px-5 py-3 font-bold text-white"
                 >
                     Suggest Finalization
@@ -434,8 +490,10 @@ function EscrowCard({ escrow, onFunded }) {
                     <h4 className="font-bold text-purple-300">Suggest Finalization</h4>
 
                     <p className="mt-2 text-sm text-slate-300">
-                    Total locked: {sol(totalLocked)} SOL
+                        Total locked: {sol(totalLocked)} SOL
                     </p>
+
+                    
 
                     <div className="mt-4 grid gap-3 md:grid-cols-2">
                         <div>
@@ -463,9 +521,40 @@ function EscrowCard({ escrow, onFunded }) {
                         </div>
                     </div>
 
+                    <div className="mt-4 rounded-xl border border-slate-700 bg-slate-950 p-4">
+                        <div className="flex items-center justify-between">
+                            <label className="text-sm font-semibold text-slate-300">
+                            Optional donation to website
+                            </label>
+
+                            <span className="text-sm font-bold text-purple-300">
+                            {donationPercent}%
+                            </span>
+                        </div>
+
+                        <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={donationPercent}
+                            onChange={(e) => handleDonationChange(Number(e.target.value))}
+                            className="mt-4 w-full"
+                        />
+
+                        <p className="mt-2 text-sm text-slate-400">
+                            Donation amount: {sol(donationLamports)} SOL
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                            Donation is optional and requires acceptance by both parties.
+                        </p>
+                    </div>
+
                     <p className={`mt-3 text-sm ${payoutIsValid ? "text-green-300" : "text-red-300"}`}>
-                        Payout total: {Number(payoutA || 0) + Number(payoutB || 0)} SOL
+                        Payout + donation total: {sol(payoutTotalLamports)} SOL
                         {" "} / required {sol(totalLocked)} SOL
+                    </p>
+                    <p className={`mt-3 text-sm ${payoutIsValid ? "text-green-300" : "text-yellow-300"}`}>
+                        Remaining to allocate: {sol(remainingLamports)} SOL
                     </p>
 
                     <div className="mt-4">

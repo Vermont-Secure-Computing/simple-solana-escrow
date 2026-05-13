@@ -12,7 +12,7 @@ function App() {
       <header className="border-b border-white/10 bg-slate-900/80">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div>
-            <h1 className="text-2xl font-bold text-white">Sol Escrow</h1>
+            <h1 className="text-2xl font-bold !text-white">Sol Escrow</h1>
             {/* <p className="text-sm text-slate-400">
               Standalone two-party escrow on Solana
             </p> */}

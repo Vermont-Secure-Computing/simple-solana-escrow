@@ -8,6 +8,8 @@ pub const STATUS_DEPOSITS_COMPLETE: u8 = 1;
 pub const STATUS_FINALIZATION_SUGGESTED: u8 = 2;
 pub const STATUS_COMPLETED: u8 = 3;
 
+pub const DONATION_RECIPIENT: Pubkey = pubkey!("61Gt8siRo84pmGziia5dHuJMkx9ne1d4Cb5aHsyQGP85");
+
 #[program]
 pub mod sol_shop_escrow {
     use super::*;
@@ -18,6 +20,7 @@ pub mod sol_shop_escrow {
         escrow_type: u8,
         party_a: Pubkey,
         party_b: Pubkey,
+        reference_amount: u64,
         required_deposit_a: u64,
         required_deposit_b: u64,
         note: String,
@@ -37,6 +40,8 @@ pub mod sol_shop_escrow {
             party_a != Pubkey::default() || party_b != Pubkey::default(),
             EscrowError::InvalidParty
         );
+
+        require!(reference_amount > 0, EscrowError::InvalidAmount);
 
         if party_a != Pubkey::default() && party_b != Pubkey::default() {
             require!(party_a != party_b, EscrowError::InvalidParty);
@@ -60,6 +65,9 @@ pub mod sol_shop_escrow {
         escrow.proposed_payout_b = 0;
         escrow.finalization_proposer = Pubkey::default();
         escrow.finalization_note = String::new();
+
+        escrow.reference_amount = reference_amount;
+        escrow.proposed_donation = 0;
 
         escrow.vault = ctx.accounts.vault.key();
         escrow.status = STATUS_CREATED;
@@ -181,6 +189,7 @@ pub mod sol_shop_escrow {
         ctx: Context<SuggestFinalization>,
         payout_a: u64,
         payout_b: u64,
+        proposed_donation: u64,
         finalization_note: String,
     ) -> Result<()> {
         let escrow = &mut ctx.accounts.escrow;
@@ -196,19 +205,23 @@ pub mod sol_shop_escrow {
             EscrowError::Unauthorized
         );
 
+        require!(finalization_note.len() <= 200, EscrowError::NoteTooLong);
+
         let total_locked = escrow.deposited_a + escrow.deposited_b;
 
         require!(
-            payout_a + payout_b == total_locked,
+            payout_a + payout_b + proposed_donation == total_locked,
             EscrowError::InvalidFinalization
         );
 
-        require!(finalization_note.len() <= 200, EscrowError::NoteTooLong);
-
-
+        require!(
+            proposed_donation <= escrow.reference_amount,
+            EscrowError::InvalidDonation
+        );
 
         escrow.proposed_payout_a = payout_a;
         escrow.proposed_payout_b = payout_b;
+        escrow.proposed_donation = proposed_donation;
         escrow.finalization_proposer = signer;
         escrow.finalization_note = finalization_note;
 
@@ -241,11 +254,28 @@ pub mod sol_shop_escrow {
         let payout_a = escrow.proposed_payout_a;
         let payout_b = escrow.proposed_payout_b;
 
+        let donation = escrow.proposed_donation;
+
+        require_keys_eq!(
+            ctx.accounts.party_a.key(),
+            escrow.party_a,
+            EscrowError::Unauthorized
+        );
+
+        require_keys_eq!(
+            ctx.accounts.party_b.key(),
+            escrow.party_b,
+            EscrowError::Unauthorized
+        );
+
         **ctx.accounts.vault.to_account_info().try_borrow_mut_lamports()? -= payout_a;
         **ctx.accounts.party_a.to_account_info().try_borrow_mut_lamports()? += payout_a;
 
         **ctx.accounts.vault.to_account_info().try_borrow_mut_lamports()? -= payout_b;
         **ctx.accounts.party_b.to_account_info().try_borrow_mut_lamports()? += payout_b;
+
+        **ctx.accounts.vault.to_account_info().try_borrow_mut_lamports()? -= donation;
+        **ctx.accounts.donation_recipient.to_account_info().try_borrow_mut_lamports()? += donation;
 
         escrow.status = STATUS_COMPLETED;
         escrow.finalized_at = Clock::get()?.unix_timestamp;
@@ -278,6 +308,7 @@ pub mod sol_shop_escrow {
         escrow.proposed_payout_b = 0;
         escrow.finalization_proposer = Pubkey::default();
         escrow.finalization_note = String::new();
+        escrow.proposed_donation = 0;
 
         escrow.status = STATUS_DEPOSITS_COMPLETE;
 
@@ -314,7 +345,7 @@ pub struct CreateEscrow<'info> {
         ],
         bump,
     )]
-    /// CHECK: system-owned PDA vault for holding SOL
+    /// CHECK: program-owned PDA vault for holding SOL
     pub vault: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
@@ -336,7 +367,7 @@ pub struct Deposit<'info> {
         ],
         bump
     )]
-    /// CHECK: system-owned PDA vault for holding SOL
+    /// CHECK: program-owned PDA vault for holding SOL
     pub vault: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
@@ -374,6 +405,8 @@ pub struct Escrow {
 
     #[max_len(200)]
     pub note: String,
+    pub reference_amount: u64,
+    pub proposed_donation: u64,
 }
 
 #[derive(Accounts)]
@@ -399,7 +432,7 @@ pub struct WithdrawBeforeComplete<'info> {
         ],
         bump
     )]
-    /// CHECK: system-owned PDA vault for holding SOL
+    /// CHECK: program-owned PDA vault for holding SOL
     pub vault: UncheckedAccount<'info>,
 }
 
@@ -438,6 +471,13 @@ pub struct AcceptFinalization<'info> {
     )]
     /// CHECK:
     pub vault: UncheckedAccount<'info>,
+    
+    #[account(
+        mut,
+        address = DONATION_RECIPIENT
+    )]
+    /// CHECK: hardcoded donation recipient
+    pub donation_recipient: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
@@ -489,4 +529,10 @@ pub enum EscrowError {
 
     #[msg("You cannot reject your own finalization")]
     CannotRejectOwnFinalization,
+
+    #[msg("Invalid donation")]
+    InvalidDonation,
+
+    #[msg("Invalid donation recipient")]
+    InvalidDonationRecipient,
 }

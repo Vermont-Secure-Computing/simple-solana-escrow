@@ -58,6 +58,11 @@
               }
             ]
           }
+        },
+        {
+          "name": "donation_recipient",
+          "writable": true,
+          "address": "61Gt8siRo84pmGziia5dHuJMkx9ne1d4Cb5aHsyQGP85"
         }
       ],
       "args": []
@@ -150,6 +155,10 @@
         {
           "name": "party_b",
           "type": "pubkey"
+        },
+        {
+          "name": "reference_amount",
+          "type": "u64"
         },
         {
           "name": "required_deposit_a",
@@ -276,6 +285,10 @@
         },
         {
           "name": "payout_b",
+          "type": "u64"
+        },
+        {
+          "name": "proposed_donation",
           "type": "u64"
         },
         {
@@ -416,6 +429,16 @@
       "code": 6012,
       "name": "CannotRejectOwnFinalization",
       "msg": "You cannot reject your own finalization"
+    },
+    {
+      "code": 6013,
+      "name": "InvalidDonation",
+      "msg": "Invalid donation"
+    },
+    {
+      "code": 6014,
+      "name": "InvalidDonationRecipient",
+      "msg": "Invalid donation recipient"
     }
   ],
   "types": [
@@ -495,6 +518,14 @@
           {
             "name": "note",
             "type": "string"
+          },
+          {
+            "name": "reference_amount",
+            "type": "u64"
+          },
+          {
+            "name": "proposed_donation",
+            "type": "u64"
           }
         ]
       }

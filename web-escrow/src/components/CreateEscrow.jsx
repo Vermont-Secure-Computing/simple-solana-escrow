@@ -117,6 +117,7 @@ function CreateEscrow() {
         escrowId,
         requiredDepositA,
         requiredDepositB,
+        referenceAmount: toLamports(price),
         note,
       });
 
@@ -131,7 +132,7 @@ function CreateEscrow() {
 
   return (
     <section className="rounded-2xl border border-slate-700 bg-slate-900 p-6 text-white shadow-xl">
-      <h2 className="text-2xl font-bold text-white">Create Escrow</h2>
+      <h2 className="text-2xl font-bold !text-white">Create Escrow</h2>
       <p className="mt-1 text-sm text-slate-300">
         Start by choosing your role. The contract still stores neutral Party A and Party B fields.
       </p>

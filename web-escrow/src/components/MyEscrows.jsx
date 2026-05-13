@@ -63,7 +63,7 @@ function MyEscrows() {
   if (!wallet.connected) {
     return (
       <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
-        <h2 className="text-xl font-bold">My Escrows</h2>
+        <h2 className="text-xl font-bold !text-white">My Escrows</h2>
         <p className="mt-2 text-slate-400">Connect your wallet to view escrows.</p>
       </section>
     );
