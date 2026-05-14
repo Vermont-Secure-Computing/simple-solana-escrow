@@ -185,7 +185,7 @@ function CreateEscrow() {
             </select>
           </div>
 
-          <div>
+          {/* <div>
             <label className="mb-2 block text-sm font-medium text-slate-200">
               Other party wallet address optional
             </label>
@@ -195,7 +195,7 @@ function CreateEscrow() {
               placeholder="Leave empty if unknown"
               className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white placeholder:text-slate-500"
             />
-          </div>
+          </div> */}
 
           <div className="grid gap-4 md:grid-cols-3">
             <div>
