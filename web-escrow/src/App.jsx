@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
-import { LandingPage } from './components/LandingPage';
-import EscrowHome from './components/EscrowHome';
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import CreateEscrow from "./components/CreateEscrow";
+import MyEscrows from "./components/MyEscrows";
+import LookupEscrow from "./components/LookupEscrow";
+import logo from "./assets/logo.png";
 
 function App() {
   const [tab, setTab] = useState("create");

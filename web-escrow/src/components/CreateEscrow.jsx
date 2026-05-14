@@ -1,6 +1,11 @@
 import { useMemo, useState } from "react";
 import { LAMPORTS_PER_SOL, PublicKey, SystemProgram } from "@solana/web3.js";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faBagShopping,
+  faCartShopping,
+} from "@fortawesome/free-solid-svg-icons";
 import {
   createEscrow,
   ESCROW_TYPE_PAYMENT,
@@ -140,30 +145,56 @@ function CreateEscrow() {
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         <button
           onClick={() => setMode("buying")}
-          className={`rounded-2xl border p-5 text-left transition ${
+          className={`rounded-2xl border p-6 transition ${
             mode === "buying"
-              ? "border-blue-500 bg-blue-600/20"
-              : "border-slate-700 bg-slate-950 hover:bg-slate-800"
+              ? "border-blue-500 bg-slate-950 ring-2 ring-blue-500 hover:bg-slate-800"
+              : "border-blue-500/40 bg-blue-600/10 hover:bg-blue-600/20"
           }`}
         >
-          <h3 className="text-lg font-bold text-white">I’m Buying</h3>
-          <p className="mt-2 text-sm text-slate-300">
-            You are Party A. You will later deposit price + your refundable deposit.
-          </p>
+          <div className="flex flex-col items-center text-center">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-blue-500/20 border border-blue-500/40">
+              <FontAwesomeIcon
+                icon={faCartShopping}
+                className="text-4xl text-blue-400"
+              />
+            </div>
+
+            <h3 className="mt-4 text-xl font-bold text-blue-400">
+              I’m Buying
+            </h3>
+
+            <p className="mt-3 text-sm text-slate-300">
+              You are Party A. You will later deposit
+              price + your refundable deposit.
+            </p>
+          </div>
         </button>
 
         <button
           onClick={() => setMode("selling")}
-          className={`rounded-2xl border p-5 text-left transition ${
+          className={`rounded-2xl border p-6 transition ${
             mode === "selling"
-              ? "border-green-500 bg-green-600/20"
-              : "border-slate-700 bg-slate-950 hover:bg-slate-800"
+              ? "border-green-500 bg-slate-950 ring-2 ring-green-500 hover:bg-slate-800"
+              : "border-green-500/40 bg-green-600/10 hover:bg-green-600/20"
           }`}
         >
-          <h3 className="text-lg font-bold text-white">I’m Selling</h3>
-          <p className="mt-2 text-sm text-slate-300">
-            You are Party B. The buyer will later deposit price + buyer deposit.
-          </p>
+          <div className="flex flex-col items-center text-center">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-green-500/20 border border-green-500/40">
+              <FontAwesomeIcon
+                icon={faBagShopping}
+                className="text-4xl text-green-400"
+              />
+            </div>
+
+            <h3 className="mt-4 text-xl font-bold text-green-400">
+              I’m Selling
+            </h3>
+
+            <p className="mt-3 text-sm text-slate-300">
+              You are Party B. The buyer will later deposit
+              price + buyer deposit.
+            </p>
+          </div>
         </button>
       </div>
 
