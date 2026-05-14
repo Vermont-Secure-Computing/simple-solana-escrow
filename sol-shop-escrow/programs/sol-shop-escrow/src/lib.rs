@@ -314,6 +314,37 @@ pub mod sol_shop_escrow {
 
         Ok(())
     }
+
+
+    pub fn close_completed_escrow(ctx: Context<CloseCompletedEscrow>) -> Result<()> {
+        let escrow = &ctx.accounts.escrow;
+
+        require!(
+            escrow.status == STATUS_COMPLETED,
+            EscrowError::InvalidStatus
+        );
+
+        require_keys_eq!(
+            ctx.accounts.creator.key(),
+            escrow.creator,
+            EscrowError::Unauthorized
+        );
+
+        require_keys_eq!(
+            escrow.vault,
+            ctx.accounts.vault.key(),
+            EscrowError::InvalidVault
+        );
+
+        let vault_lamports = ctx.accounts.vault.to_account_info().lamports();
+
+        if vault_lamports > 0 {
+            **ctx.accounts.vault.to_account_info().try_borrow_mut_lamports()? -= vault_lamports;
+            **ctx.accounts.creator.to_account_info().try_borrow_mut_lamports()? += vault_lamports;
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -487,6 +518,29 @@ pub struct RejectFinalization<'info> {
 
     #[account(mut)]
     pub escrow: Account<'info, Escrow>,
+}
+
+#[derive(Accounts)]
+pub struct CloseCompletedEscrow<'info> {
+    #[account(mut)]
+    pub creator: Signer<'info>,
+
+    #[account(
+        mut,
+        close = creator
+    )]
+    pub escrow: Account<'info, Escrow>,
+
+    #[account(
+        mut,
+        seeds = [
+            b"vault",
+            escrow.key().as_ref()
+        ],
+        bump
+    )]
+    /// CHECK: program-owned PDA vault for holding SOL
+    pub vault: UncheckedAccount<'info>,
 }
 
 #[error_code]

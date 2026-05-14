@@ -7,6 +7,7 @@ import {
   suggestFinalization,
   acceptFinalization,
   rejectFinalization,
+  closeCompletedEscrow
 } from "../lib/escrowClient";
 
 function sol(value) {
@@ -275,6 +276,69 @@ function EscrowCard({ escrow, onFunded }) {
     };
 
 
+    /**
+     * Suggest finalization helpers
+     */
+    const depositedA = Number(escrow.depositedA || 0);
+    const depositedB = Number(escrow.depositedB || 0);
+    const priceLamports = Number(escrow.referenceAmount || 0);
+
+    const partyADepositOnly =
+    depositedA >= priceLamports ? depositedA - priceLamports : depositedA;
+
+    const partyBDepositOnly =
+    depositedB >= priceLamports ? depositedB - priceLamports : depositedB;
+
+    const toSolInput = (lamports) => {return String(Number(lamports) / LAMPORTS_PER_SOL);};
+
+    const setPartyADepositOnly = () => {setPayoutA(toSolInput(partyADepositOnly));};
+    const setPartyBDepositOnly = () => {setPayoutB(toSolInput(partyBDepositOnly));};
+    const setPartyADepositPlusPrice = () => {setPayoutA(toSolInput(partyADepositOnly + priceLamports));};
+    const setPartyBDepositPlusPrice = () => {setPayoutB(toSolInput(partyBDepositOnly + priceLamports));};
+
+    const setPartyARemaining = () => {
+        const currentB = Math.round(Number(payoutB || 0) * LAMPORTS_PER_SOL);
+        const remaining = totalLocked - donationLamports - currentB;
+        setPayoutA(toSolInput(Math.max(remaining, 0)));
+    };
+
+    const setPartyBRemaining = () => {
+        const currentA = Math.round(Number(payoutA || 0) * LAMPORTS_PER_SOL);
+        const remaining = totalLocked - donationLamports - currentA;
+        setPayoutB(toSolInput(Math.max(remaining, 0)));
+    };
+
+    const clearPartyA = () => {setPayoutA("");};
+    const clearPartyB = () => {setPayoutB("");};
+    console.log("escrow: ", escrow)
+
+
+    /**
+     * Logic for closing/deleting completed escrow
+     */
+    const canCloseCompleted = escrow.status === 3 && myKey && escrow.creator === myKey;
+
+    const handleCloseCompleted = async () => {
+        try {
+            setLoading(true);
+
+            const sig = await closeCompletedEscrow({
+                wallet,
+                connection,
+                escrowPda: escrow.pda,
+                vaultPda: escrow.vault,
+            });
+
+            alert(`Escrow deleted!\n\nTX:\n${sig}`);
+            await onFunded?.();
+        } catch (error) {
+            console.error(error);
+            alert(error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <div className="rounded-2xl border border-white/10 bg-slate-950 p-5 text-white">
             <div className="space-y-5">
@@ -399,23 +463,39 @@ function EscrowCard({ escrow, onFunded }) {
                     </div>
 
                     <div className="mt-4 grid gap-3 md:grid-cols-2">
-                        <div className="rounded-xl border border-slate-700 bg-slate-900 p-4">
-                            <p className="text-xs uppercase tracking-wide text-slate-500">
-                            Party A receives
-                            </p>
+                        <div className={`rounded-xl border p-4 ${isPartyA ? "border-blue-500 bg-blue-500/10" : "border-slate-700 bg-slate-900"}`}>
+                            <div className="flex items-center justify-between">
+                                <p className="text-xs uppercase tracking-wide text-slate-500">
+                                Party A receives
+                                </p>
+
+                                {isPartyA && (
+                                <span className="rounded-full bg-blue-500/20 px-2 py-1 text-xs font-semibold text-blue-300">
+                                    You
+                                </span>
+                                )}
+                            </div>
 
                             <p className="mt-2 text-2xl font-bold text-white">
-                            {sol(escrow.proposedPayoutA)} SOL
+                                {sol(escrow.proposedPayoutA)} SOL
                             </p>
                         </div>
 
-                        <div className="rounded-xl border border-slate-700 bg-slate-900 p-4">
-                            <p className="text-xs uppercase tracking-wide text-slate-500">
-                            Party B receives
-                            </p>
+                        <div className={`rounded-xl border p-4 ${isPartyB ? "border-green-500 bg-green-500/10" : "border-slate-700 bg-slate-900"}`}>
+                            <div className="flex items-center justify-between">
+                                <p className="text-xs uppercase tracking-wide text-slate-500">
+                                    Party B receives
+                                </p>
+
+                                {isPartyB && (
+                                    <span className="rounded-full bg-green-500/20 px-2 py-1 text-xs font-semibold text-green-300">
+                                        You
+                                    </span>
+                                )}
+                            </div>
 
                             <p className="mt-2 text-2xl font-bold text-white">
-                            {sol(escrow.proposedPayoutB)} SOL
+                                {sol(escrow.proposedPayoutB)} SOL
                             </p>
                         </div>
 
@@ -496,7 +576,7 @@ function EscrowCard({ escrow, onFunded }) {
                     
 
                     <div className="mt-4 grid gap-3 md:grid-cols-2">
-                        <div>
+                        {/* <div>
                             <label className="mb-2 block text-sm text-slate-300">
                             Payout to Party A SOL
                             </label>
@@ -518,6 +598,97 @@ function EscrowCard({ escrow, onFunded }) {
                                 placeholder="0.00"
                                 className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white"
                             />
+                        </div> */}
+                        <div>
+                            <label className="mb-2 block text-sm text-slate-300">
+                                Payout to Party A SOL
+                            </label>
+
+                            <input
+                                value={payoutA}
+                                onChange={(e) => setPayoutA(e.target.value)}
+                                placeholder="0.00"
+                                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white"
+                            />
+
+                            <div className="mt-2 flex flex-wrap gap-2">
+                                <button
+                                    type="button"
+                                    onClick={setPartyADepositOnly}
+                                    className="rounded-lg bg-white/10 px-3 py-2 text-xs text-white hover:bg-white/20"
+                                >
+                                    Deposit only
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={setPartyADepositPlusPrice}
+                                    className="rounded-lg bg-blue-500/20 px-3 py-2 text-xs text-blue-200 hover:bg-blue-500/30"
+                                >
+                                    Deposit + Price
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={setPartyARemaining}
+                                    className="rounded-lg bg-purple-500/20 px-3 py-2 text-xs text-purple-200 hover:bg-purple-500/30"
+                                >
+                                    Remaining
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={clearPartyA}
+                                    className="rounded-lg bg-red-500/20 px-3 py-2 text-xs text-red-200 hover:bg-red-500/30"
+                                >
+                                    Clear
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="mb-2 block text-sm text-slate-300">
+                                Payout to Party B SOL
+                            </label>
+
+                            <input
+                                value={payoutB}
+                                onChange={(e) => setPayoutB(e.target.value)}
+                                placeholder="0.00"
+                                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white"
+                            />
+
+                            <div className="mt-2 flex flex-wrap gap-2">
+                                <button
+                                    type="button"
+                                    onClick={setPartyBDepositOnly}
+                                    className="rounded-lg bg-white/10 px-3 py-2 text-xs text-white hover:bg-white/20"
+                                >
+                                    Deposit only
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={setPartyBDepositPlusPrice}
+                                    className="rounded-lg bg-blue-500/20 px-3 py-2 text-xs text-blue-200 hover:bg-blue-500/30"
+                                >
+                                    Deposit + Price
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={setPartyBRemaining}
+                                    className="rounded-lg bg-purple-500/20 px-3 py-2 text-xs text-purple-200 hover:bg-purple-500/30"
+                                >
+                                    Remaining
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={clearPartyB}
+                                    className="rounded-lg bg-red-500/20 px-3 py-2 text-xs text-red-200 hover:bg-red-500/30"
+                                >
+                                    Clear
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -590,6 +761,16 @@ function EscrowCard({ escrow, onFunded }) {
                         </button>
                     </div>
                 </div>
+            )}
+
+            {canCloseCompleted && (
+                <button
+                    onClick={handleCloseCompleted}
+                    disabled={loading}
+                    className="mt-3 rounded-xl bg-red-600 px-5 py-3 font-bold text-white disabled:opacity-50"
+                >
+                    {loading ? "Deleting..." : "Delete Completed Escrow"}
+                </button>
             )}
         </div>
     );

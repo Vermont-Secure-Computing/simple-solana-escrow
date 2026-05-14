@@ -314,3 +314,24 @@ export async function rejectFinalization({
 
   return sig;
 }
+
+
+export async function closeCompletedEscrow({
+  wallet,
+  connection,
+  escrowPda,
+  vaultPda,
+}) {
+  const program = getProgram(wallet, connection);
+
+  const sig = await program.methods
+    .closeCompletedEscrow()
+    .accounts({
+      creator: wallet.publicKey,
+      escrow: new PublicKey(escrowPda),
+      vault: new PublicKey(vaultPda),
+    })
+    .rpc();
+
+  return sig;
+}
