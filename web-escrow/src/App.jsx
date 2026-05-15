@@ -2,6 +2,7 @@ import { useState } from "react";
 import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
 import { LandingPage } from './components/LandingPage';
 import EscrowHome from './components/EscrowHome';
+import logo from "./assets/logo.png"; 
 
 function App() {
   const [tab, setTab] = useState("create");
