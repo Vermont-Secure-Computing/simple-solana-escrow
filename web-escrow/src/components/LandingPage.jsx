@@ -374,10 +374,7 @@ export function LandingPage() {
                 </h3>
 
                 <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-300">
-                  Both parties put skin in the game. If someone acts unfairly
-                  or disappears, the other party may receive the penalty
-                  deposit according to the escrow rules or automatic
-                  resolution logic.
+                  Both parties put skin in the game.  They are incentivized to finalize the transaction to get their deposit back.
                 </p>
               </div>
 
