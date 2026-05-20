@@ -200,34 +200,6 @@ function CreateEscrow() {
 
       {mode && (
         <div className="mt-6 grid gap-4">
-          <div>
-            <label className="mb-2 block text-sm font-medium text-slate-200">
-              Escrow template
-            </label>
-            <select
-              value={template}
-              onChange={(e) => setTemplate(e.target.value)}
-              className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white"
-            >
-              <option value="payment">Payment Escrow</option>
-              <option value="bet">Bet / Wager</option>
-              <option value="bond">Mutual Performance Bond</option>
-              <option value="custom">Custom Escrow</option>
-            </select>
-          </div>
-
-          {/* <div>
-            <label className="mb-2 block text-sm font-medium text-slate-200">
-              Other party wallet address optional
-            </label>
-            <input
-              value={counterparty}
-              onChange={(e) => setCounterparty(e.target.value)}
-              placeholder="Leave empty if unknown"
-              className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white placeholder:text-slate-500"
-            />
-          </div> */}
-
           <div className="grid gap-4 md:grid-cols-3">
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-200">

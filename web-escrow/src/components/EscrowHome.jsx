@@ -1,24 +1,36 @@
 import React, { useState } from "react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import { Link } from "react-router-dom";
 import CreateEscrow from "./CreateEscrow";
 import MyEscrows from "./MyEscrows";
 import LookupEscrow from "./LookupEscrow";
+import logo from "../assets/logo.png"
 
 function EscrowHome() {
     const [tab, setTab] = useState("create");
 
     return (
         <div className="min-h-screen bg-slate-950 text-white">
-            <header className="border-b border-white/10 bg-slate-900/80">
-                <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-                    <div>
-                        <h1 className="text-2xl font-bold !text-white">Sol Escrow</h1>
-                        {/* <p className="text-sm text-slate-400">
-                        Standalone two-party escrow on Solana
-                        </p> */}
-                    </div>
+            <header className="border-b border-white/10 bg-slate-900/80 backdrop-blur">
+                <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+                    <Link
+                        to="/"
+                        className="flex min-w-0 items-center gap-3 rounded-xl transition hover:opacity-80"
+                    >
+                        <img
+                            src={logo}
+                            alt="Sol Escrow"
+                            className="h-9 w-auto shrink-0 object-contain sm:h-10"
+                        />
 
-                    <WalletMultiButton />
+                        <span className="truncate text-lg font-bold text-white sm:text-2xl">
+                            SSScrow
+                        </span>
+                    </Link>
+
+                    <div className="shrink-0 scale-90 origin-right sm:scale-100">
+                        <WalletMultiButton />
+                    </div>
                 </div>
             </header>
 
