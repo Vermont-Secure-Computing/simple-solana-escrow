@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program;
 
-declare_id!("E13gKpCo3pmg1QizBgEt2kxkVuTXAN6mrQQaS4aAt9LZ");
+declare_id!("J6oeUYbGXSdKyH4d1YhtHoCuEA79d9FQurmsim82KN5A");
 
 pub const STATUS_CREATED: u8 = 0;
 pub const STATUS_DEPOSITS_COMPLETE: u8 = 1;
