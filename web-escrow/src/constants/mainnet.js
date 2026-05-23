@@ -4,4 +4,4 @@ export const NETWORK = "mainnet";
 
 export const PROGRAM_ID = new PublicKey("J6oeUYbGXSdKyH4d1YhtHoCuEA79d9FQurmsim82KN5A");
 
-export const RPC_URL = "http://ssscrow.com/rpc"
+export const RPC_URL = "https://ssscrow.com/rpc"
