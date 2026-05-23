@@ -7,15 +7,15 @@ solana_version = "2.3.0"
 resolution = true
 skip-lint = false
 
-[programs.localnet]
-sol_shop_escrow = "E13gKpCo3pmg1QizBgEt2kxkVuTXAN6mrQQaS4aAt9LZ"
+[programs.mainnet]
+sol_shop_escrow = "J6oeUYbGXSdKyH4d1YhtHoCuEA79d9FQurmsim82KN5A"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
-wallet = "~/.config/solana/sol_shop_escrow.json"
+cluster = "mainnet"
+wallet = "~/.config/solana/ssscrow_mainnet_deployer.json"
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 \"tests/**/*.ts\""
