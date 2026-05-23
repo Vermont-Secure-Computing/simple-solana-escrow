@@ -21,7 +21,8 @@ import "@solana/wallet-adapter-react-ui/styles.css";
 
 window.Buffer = Buffer;
 
-const endpoint = "https://api.devnet.solana.com";
+import CONFIG from "./constants";
+const endpoint = CONFIG.RPC_URL;
 
 const wallets = [
   new PhantomWalletAdapter(),

@@ -17,7 +17,7 @@ import {
     faPeopleArrows,
     faScaleBalanced
   } from "@fortawesome/free-solid-svg-icons";
-import logo from "../assets/logo.png"
+import Header from "./Header";
 
 export function LandingPage() {
     console.log("landing page")
@@ -25,20 +25,7 @@ export function LandingPage() {
         <div className="min-h-screen bg-[#020617] text-white">
         {/* HERO */}
         <section className="mx-auto max-w-6xl">
-            <header className="flex items-center justify-between border-b border-slate-700 pb-6">
-                <img
-                    src={logo}
-                    alt="Sol Escrow"
-                    className="h-10 w-auto object-contain"
-                />
-
-                <Link
-                  to="/escrow"
-                  className="rounded-full border border-green-500/20 bg-black px-5 py-2 text-sm font-medium text-white transition hover:border-green-400/40 hover:bg-green-500/10"
-                >
-                  Open App
-                </Link>
-            </header>
+            <Header />
   
             <div className="mx-auto mt-5 flex max-w-4xl flex-col items-center text-center">
                 <h1 className="text-3xl font-bold leading-tight md:text-5xl">

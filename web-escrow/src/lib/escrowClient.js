@@ -1,9 +1,13 @@
 import * as anchor from "@coral-xyz/anchor";
 import { PublicKey, SystemProgram } from "@solana/web3.js";
 import BN from "bn.js";
-import idl from "../idl/sol_shop_escrow.json";
+import devnetIdl from "../idl/devnet/sol_shop_escrow.json";
+import mainnetIdl from "../idl/mainnet/sol_shop_escrow.json";
 
-export const PROGRAM_ID = new PublicKey("E13gKpCo3pmg1QizBgEt2kxkVuTXAN6mrQQaS4aAt9LZ");
+const idl = import.meta.env.VITE_NETWORK === "mainnet" ? mainnetIdl : devnetIdl;
+
+import CONFIG from "../constants";
+export const PROGRAM_ID = CONFIG.PROGRAM_ID;
 
 const DONATION_RECIPIENT = "61Gt8siRo84pmGziia5dHuJMkx9ne1d4Cb5aHsyQGP85";
 
