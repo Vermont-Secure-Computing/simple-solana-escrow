@@ -339,24 +339,69 @@ function EscrowCard({ escrow, onFunded }) {
         }
     };
 
+
+    function parseEscrowNote(note) {
+        if (!note) {
+            return {
+                title: "Untitled Escrow",
+                details: null,
+            };
+        }
+
+        try {
+            const parsed = JSON.parse(note);
+
+            if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+                return {
+                    title: String(note),
+                    details: null,
+                };
+            }
+
+            return {
+                title: parsed.productName || parsed.marketplace || "Escrow Details",
+                details: parsed,
+            };
+        } catch {
+            return {
+                title: String(note),
+                details: null,
+            };
+        }
+    }
+
+    const escrowNote = parseEscrowNote(escrow.note);
+
     return (
         <div className="rounded-2xl border border-white/10 bg-slate-950 p-5 text-white">
             <div className="space-y-5">
                 {/* Header */}
-                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                    <div>
-                    <h3 className="text-lg font-bold text-white">
-                        {escrow.note || "Untitled Escrow"}
-                    </h3>
-                    <p className="mt-1 text-xs text-slate-500 break-all">
+                <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div className="min-w-0 flex-1">
+                        <h3 className="max-w-full break-words text-lg font-bold text-white [overflow-wrap:anywhere]">
+                        {escrowNote.title}
+                        </h3>
+
+                        <p className="mt-1 max-w-full break-all text-xs text-slate-500">
                         Escrow: {escrow.pda}
-                    </p>
+                        </p>
                     </div>
 
-                    <span className="w-fit rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-300">
-                    {statusLabel(escrow.status)}
+                    <span className="w-fit shrink-0 rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-300">
+                        {statusLabel(escrow.status)}
                     </span>
                 </div>
+                {escrowNote.details && (
+                    <div className="rounded-xl border border-slate-700 bg-slate-900 p-4">
+                        <p className="text-xs uppercase tracking-wide text-slate-500">
+                        Escrow Note
+                        </p>
+
+                        <pre className="mt-2 max-w-full whitespace-pre-wrap break-words text-xs text-slate-300 [overflow-wrap:anywhere]">
+                        {JSON.stringify(escrowNote.details, null, 2)}
+                        </pre>
+                    </div>
+                )}
 
                 {/* Status */}
                 <div className="rounded-2xl border border-blue-500/20 bg-blue-500/10 p-4">
