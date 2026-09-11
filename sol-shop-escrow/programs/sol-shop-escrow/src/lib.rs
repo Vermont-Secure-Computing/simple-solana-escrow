@@ -153,7 +153,10 @@ pub mod sol_shop_escrow {
         let escrow = &mut ctx.accounts.escrow;
         let withdrawer = ctx.accounts.withdrawer.key();
 
-        require!(escrow.status == STATUS_CREATED, EscrowError::InvalidStatus);
+        require!(
+            escrow.status == STATUS_CREATED, 
+            EscrowError::InvalidStatus
+        );
         require_keys_eq!(
             escrow.vault,
             ctx.accounts.vault.key(),
@@ -182,6 +185,20 @@ pub mod sol_shop_escrow {
         **ctx.accounts.vault.to_account_info().try_borrow_mut_lamports()? -= amount;
         **ctx.accounts.withdrawer.to_account_info().try_borrow_mut_lamports()? += amount;
 
+        let remaining_lamports = ctx.accounts.vault.to_account_info().lamports();
+
+        if remaining_lamports > 0 {
+            **ctx.accounts
+                .vault
+                .to_account_info()
+                .try_borrow_mut_lamports()? -= remaining_lamports;
+
+            **ctx.accounts
+                .creator
+                .to_account_info()
+                .try_borrow_mut_lamports()? += remaining_lamports;
+        }
+
         Ok(())
     }
 
@@ -207,12 +224,16 @@ pub mod sol_shop_escrow {
 
         require!(finalization_note.len() <= 200, EscrowError::NoteTooLong);
 
-        let total_locked = escrow.deposited_a + escrow.deposited_b;
+        let total_locked = escrow.deposited_a 
+            .checked_add(escrow.deposited_b)
+            .ok_or(EscrowError::InvalidFinalization)?;
 
-        require!(
-            payout_a + payout_b + proposed_donation == total_locked,
-            EscrowError::InvalidFinalization
-        );
+        let total_payout = payout_a
+            .checked_add(payout_b)
+            .and_then(|total| total.checked_add(proposed_donation))
+            .ok_or(EscrowError::InvalidFinalization)?;
+
+        require!(total_payout == total_locked, EscrowError::InvalidFinalization);
 
         require!(
             proposed_donation <= escrow.reference_amount,
