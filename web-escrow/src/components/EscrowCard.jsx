@@ -98,7 +98,7 @@ function EscrowCard({ escrow, onFunded }) {
         return "Waiting for both parties to fund.";
         }
 
-        function statusLabel(status) {
+    function statusLabel(status) {
         if (status === 0) return "Created / Funding";
         if (status === 1) return "Deposits Complete";
         if (status === 2) return "Finalization Suggested";
